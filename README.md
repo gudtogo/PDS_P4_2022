@@ -7,6 +7,7 @@
 
 ## Comandos de funcionamiento
 
+- Para iniciar el bot, se debe correr el archivo TelegramBot.py y luego usar los comandos en Telegram
 - `/start`, para crear tu cuenta y empezar a probar tu conocimiento sobre el lenguaje Python 3.
 - `/number`, para iniciar un nuevo juego de adivinar el numero.
 - `/trivia`, No implementado aun
