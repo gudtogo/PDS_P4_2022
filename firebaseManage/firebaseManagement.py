@@ -300,6 +300,7 @@ def retrieveUser(chatid):
     usersDatabase = db.reference('/ID')
     try:
         userData = usersDatabase.child(str(chatid)).get()
+        prCyan(userData)
         wantedUser = jsonToUser(userData)
         prCyan(DEBUGFN+DEBUGMN + f"user data: {userData}")
         if 'uq_history' in userData:

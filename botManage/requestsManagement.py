@@ -8,7 +8,7 @@ from itsObjects import *
 from bottle import Bottle, run, post, response, request as bottle_request
 
 DEBUGFN = "[requestsManagement]"
-numbers = dict()
+numbers = 0
 
 
 class BotHandlerMixin:
@@ -29,8 +29,26 @@ class BotHandlerMixin:
             `Str`
                 The chat id from the message.
         """
+        chat_id = data['message']['from']['id']
+        return chat_id
+
+    def get_groupchat_id(self, data):
+        """
+        Method to extract chat id from telegram request.
+
+        Parameters
+        ----------
+            data : `dict`
+                    The data sent by the TelegramAPI about the message.
+
+        Returns
+        -------
+            `Str`
+                The chat id from the message.
+        """
         chat_id = data['message']['chat']['id']
         return chat_id
+
 
     def get_poll_id(self, data):
         """
@@ -170,7 +188,7 @@ class TelegramBot(BotHandlerMixin, Bottle):
         if chatID != None:
             chat_id = chatID
         else:
-            chat_id = self.get_message_id(data)
+            chat_id = self.get_groupchat_id(data)
         json_data = {
             "chat_id": chat_id,
             "text": answer,
@@ -180,6 +198,7 @@ class TelegramBot(BotHandlerMixin, Bottle):
 
     def assign_number_game_handler(self, cuser, data, chatid):
         DEBUGMN = "[number_game_handler]"
+        global numbers
         if cuser == None:
             not_registered = self.prepare_data_for_text(
                 data, '/code:', f'No has comenzado ningun juego!, escribe "/start" para comenzar!')
@@ -188,36 +207,36 @@ class TelegramBot(BotHandlerMixin, Bottle):
         registered = self.prepare_data_for_text(
             data, '/number', "")
         self.send_message(registered)
-        numbers[chatid] = random.randint(0, 100)
+        numbers = random.randint(0, 100)
 
-    def try_guessing_number_handler(self, data, chatid):
+    def try_guessing_number_handler(self, data, chatid, gchatid):
         global attempts
         us = retrieveUser(chatid)
         try:
             user_message = int(data[1])
-            if user_message > numbers[chatid]:
+            if user_message > numbers:
                 attempts -= 1
                 higher_number = self.prepare_data_for_text(
-                    data, '/code:', 'Tu numero es mayor que el mio', "", chatid)
+                    data, '/code:', 'Tu numero es mayor que el mio', "", gchatid)
                 self.send_message(higher_number)
                 if attempts == 0:
                     lost = self.prepare_data_for_text(
-                        data, "/code:", "Perdiste, no quedan mas intentos", "", chatid)
+                        data, "/code:", "Perdiste, no quedan mas intentos", "", gchatid)
                     self.send_message(lost)
-            elif user_message < numbers[chatid]:
+            elif user_message < numbers:
                 attempts -= 1
-                prCyan(numbers[chatid])
+                prCyan(numbers)
                 prGreen(data)
                 lower_number = self.prepare_data_for_text(
-                    data, '/code:', 'Tu numero es mas bajo que el mio', "", chatid)
+                    data, '/code:', 'Tu numero es mas bajo que el mio', "", gchatid)
                 self.send_message(lower_number)
                 if attempts == 0:
                     lost = self.prepare_data_for_text(
-                        data, "/code:", "Perdiste, no quedan mas intentos", "", chatid)
+                        data, "/code:", "Perdiste, no quedan mas intentos", "", gchatid)
                     self.send_message(lost)
             else:
                 correct_number = self.prepare_data_for_text(
-                    data, '/code:', 'Numero Correcto!, usa el comando /number para jugar otra vez, o usa el comando /stats para ver el score historico', "", chatid)
+                    data, '/code:', 'Numero Correcto!, usa el comando /number para jugar otra vez, o usa el comando /stats para ver el score historico', "", gchatid)
                 self.send_message(correct_number)
                 us.score += 1
                 updateUser(chatID=us.chatID, user=us)
@@ -254,6 +273,8 @@ class TelegramBot(BotHandlerMixin, Bottle):
             self.poll_answer_handler(message_text[1], data)
         else:
             chatid = self.get_message_id(data)
+            gchatid = self.get_groupchat_id(data)
+            prCyan(chatid)
             prGreen(DEBUGFN+DEBUGMN+" text message received")
             if message_text[1] == '/start':
                 prGreen(DEBUGFN+DEBUGMN+" new user request")
@@ -276,4 +297,4 @@ class TelegramBot(BotHandlerMixin, Bottle):
                         data, '/code:', 'No tienes ningun juego activo, usa el comando /number para empezar uno')
                     self.send_message(not_alive)
                 elif attempts >= 1:
-                    self.try_guessing_number_handler(message_text, chatid)
+                    self.try_guessing_number_handler(message_text, chatid, gchatid)
