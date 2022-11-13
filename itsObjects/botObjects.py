@@ -38,13 +38,13 @@ class User:
                 data parsed to Json format.
     """
 
-    def __init__(self, chatID, score, nickname):
+    def __init__(self, chatID, score, nickname, attempts):
         self.chatID = chatID
         self.score = score
         #self.hints = hints
         #self.qhint = 0
         self.nickname = nickname
-        self.streak = 0
+        self.attempts = attempts
         #self.qac = 0
         #self.qai = 0
         #self.qatsm = 0
@@ -61,7 +61,7 @@ class User:
                 #'hints': self.hints,
                 #'qhint': self.qhint,
                 'nickname': self.nickname,
-                'streak': self.streak,
+                'attempts': self.attempts,
                 #'qac': self.qac,
                 #'qai': self.qai,
                 #'qatsm': self.qatsm,
@@ -290,7 +290,7 @@ def jsonToUser(user):
     #newUser = User(chatID=user['chatID'], score=user['score'],
     #               hints=user['hints'], nickname=user['nickname'])
     newUser = User(chatID=user['chatID'], score=user['score'],
-                   nickname=user['nickname'])
+                   nickname=user['nickname'], attempts=user['attempts'])
     """
     newUser.qhint = user['qhint']
     newUser.streak = user['score']

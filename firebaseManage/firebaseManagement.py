@@ -59,7 +59,7 @@ def detectNewUser(chatID, nickname):
         #new_user = User(chatID=chatID, score=0,
                         #hints=0, nickname=nickname)
         new_user = User(chatID=chatID, score=0,
-                        nickname=nickname)
+                        nickname=nickname, attempts=0)
         try:
             #new_user.currentSubModule = startersubm
             usersDatabase.child(chatID).set(new_user.toJson())

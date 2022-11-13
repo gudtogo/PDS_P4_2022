@@ -130,7 +130,6 @@ class BotHandlerMixin:
                 f" poll sent under the id: {r.json()['result']['poll']['id']}")
         return r.json()['result']['poll']['id']
 
-attempts = 10
 max_number = 0
 position = 0
 alive = True
@@ -246,7 +245,6 @@ class TelegramBot(BotHandlerMixin, Bottle):
         DEBUGMN = "[number_game_handler]"
         message = params.split()
         global numbers
-        global attempts
         global max_number
         global activeGame
         ready = False
@@ -266,42 +264,55 @@ class TelegramBot(BotHandlerMixin, Bottle):
                 data, '/number', "")
             self.send_message(registered)
             activeGame = True
+            users = db.reference('/ID').get()
+            for user in users:
+                us = retrieveUser(user)
+                us.attempts = attempts
+                updateUser(chatID=us.chatID, user=us)
 
 
     def try_guessing_number_handler(self, data, chatid, gchatid, user):
-        global attempts
+        #global attempts
         global activeGame
         us = retrieveUser(chatid)
         try:
             user_message = int(data[1])
             if user_message > numbers:
-                attempts -= 1
+                us.attempts = us.attempts-1
+                updateUser(chatID=us.chatID, user=us)
                 higher_number = self.prepare_data_for_text(
-                    data, '/code:', '{}, Tu numero es mayor que el numero a adivinar'.format(user), "", gchatid)
+                    data, '/code:', '{}, {} es mayor que el numero a adivinar'.format(user, user_message), "", gchatid)
                 self.send_message(higher_number)
-                if attempts == 0:
+                if us.attempts == 0:
                     lost = self.prepare_data_for_text(
                         data, "/code:", "{} Perdiste, no te quedan mas intentos".format(user), "", gchatid)
                     self.send_message(lost)
             elif user_message < numbers:
-                attempts -= 1
+                us.attempts = us.attempts-1
+                updateUser(chatID=us.chatID, user=us)
                 prCyan(numbers)
                 prGreen(data)
                 lower_number = self.prepare_data_for_text(
-                    data, '/code:', '{}, Tu numero es mas bajo que el numero a adivinar'.format(user), "", gchatid)
+                    data, '/code:', '{}, {} es mas bajo que el numero a adivinar'.format(user, user_message), "", gchatid)
                 self.send_message(lower_number)
-                if attempts == 0:
+                if us.attempts == 0:
                     lost = self.prepare_data_for_text(
                         data, "/code:", "{} Perdiste, no te quedan mas intentos".format(user), "", gchatid)
                     self.send_message(lost)
             else:
                 correct_number = self.prepare_data_for_text(
-                    data, '/code:', 'Numero Correcto!, {} adivino el numero y gano 1 punto, usen el comando (/number n_intentos n_max) para jugar otra vez, o usa el comando /stats para ver el score historico'.format(user), "", gchatid)
+                    data, '/code:', '{} es el Numero Correcto!, {} adivino el numero y gano 1 punto, usen el comando (/number n_intentos n_max) para jugar otra vez, o usa el comando /stats para ver el score historico'.format(user_message, user), "", gchatid)
                 self.send_message(correct_number)
                 us.score += 1
                 updateUser(chatID=us.chatID, user=us)
-                attempts = 0
                 activeGame = False
+
+                users2 = db.reference('/ID').get()
+                for user2 in users2:
+                    us2 = retrieveUser(user2)
+                    us2.attempts = 0
+                    updateUser(chatID=us2.chatID, user=us2)
+
         except ValueError:
             incorrect_type = self.prepare_data_for_text(
                 data, '/code:', '{}, Tu numero debe ser un numero entero'.format(user), "", gchatid)
@@ -337,7 +348,6 @@ class TelegramBot(BotHandlerMixin, Bottle):
         self.send_message(stat_to_message)
 
     def post_handler(self):
-        global attempts
         global alive
         global activeGame
         """
@@ -364,10 +374,15 @@ class TelegramBot(BotHandlerMixin, Bottle):
                     nuser_data = self.prepare_data_for_text(data, 'olduser', "", "", gchatid)
                 self.send_message(nuser_data)
             elif ('/number' in message_text[1]):
-                prRed(message_text[1])
-                attempts = 10
-                cuser = retrieveUser(chatid)
-                self.assign_number_game_handler(cuser, data, chatid, gchatid, message_text[1])
+                if(activeGame == False):
+                    prRed(message_text[1])
+                    cuser = retrieveUser(chatid)
+                    self.assign_number_game_handler(cuser, data, chatid, gchatid, message_text[1])
+                else:
+                    not_alive = self.prepare_data_for_text(
+                        data, '/code:', '{}, no puedes iniciar otro juego, espera a que el juego activo termine'.format(user_nickname), "", gchatid)
+                    self.send_message(not_alive)
+
             elif (message_text[1] == '/trivia'):
                 prCyan(gchatid)
                 prGreen(DEBUGFN+DEBUGMN+" Starting Trivia Game")
@@ -375,14 +390,15 @@ class TelegramBot(BotHandlerMixin, Bottle):
             elif (message_text[1] == '/stats'):
                 self.show_stats(data, gchatid)
             else:
+                cuser = retrieveUser(chatid)
                 if activeGame == False:
                     not_alive = self.prepare_data_for_text(
                         data, '/code:', '{} No tienes ningun juego activo, usa el comando (/number n_intentos n_max) para empezar uno o espera a que termine el juego actual'.format(user_nickname), "", gchatid)
                     self.send_message(not_alive)
                     return
-                if attempts == 0:
+                if cuser.attempts == 0:
                     not_alive = self.prepare_data_for_text(
-                        data, '/code:', '{} No tienes ningun juego activo, usa el comando (/number n_intentos n_max) para empezar uno o espera a que termine el juego actual'.format(user_nickname), "", gchatid)
+                        data, '/code:', '{}, ya no tienes mas intentos, espera a que el juego termine'.format(user_nickname), "", gchatid)
                     self.send_message(not_alive)
-                elif attempts >= 1:
+                elif cuser.attempts >= 1:
                     self.try_guessing_number_handler(message_text, chatid, gchatid, user_nickname)

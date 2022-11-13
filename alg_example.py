@@ -9,7 +9,7 @@ def prGreen(skk): print("\033[92m {}\033[00m" .format(skk))
 
 
 # test-user
-user = User(0, 0, 0, "tester")
+user = User(0, 0, 0, 0, "tester")
 # List with 6 pseudo-questions(3alternative/3code) for each sub_module. (24 questions)
 questions = [Question("La libreria random", 1, 1, "answer1",
                       "hint1", ["alt11", "alt12", "alt13"]),
