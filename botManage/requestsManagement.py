@@ -123,13 +123,16 @@ class BotHandlerMixin:
         DEBUGMN = "[send_poll]"
         message_url = self.BOT_URL + 'sendPoll'
         prGreen(DEBUGFN+DEBUGMN+" sending poll...")
+        prCyan(prepared_data)
         r = requests.post(message_url, json=prepared_data)
+        prCyan(r.json())
         prGreen(DEBUGFN+DEBUGMN +
                 f" poll sent under the id: {r.json()['result']['poll']['id']}")
         return r.json()['result']['poll']['id']
 
 attempts = 10
 max_number = 0
+position = 0
 alive = True
 activeGame = False
 
@@ -198,6 +201,46 @@ class TelegramBot(BotHandlerMixin, Bottle):
         }
 
         return json_data
+
+    def prepare_data_for_poll(self, data, question, position):
+        """
+        Method that takes the data and parse it to JSON format for the poll to be sent.
+        Parameters
+        ----------
+            data : `dict`
+                    data received from the previous message.
+            question : `Question`
+                    Question to be asked.
+        Returns
+        -------
+            `dict`
+                the data in JSON format as stated in the TelegramAPI documentation.
+        """
+        DEBUGMN = "[prepare_data_for_poll]"
+        gchat_id = self.get_groupchat_id(data)
+        json_data = {
+            "chat_id": gchat_id,
+            "question": question[position].question,
+            "options": question[position].alternatives,
+            "correct_option_id": question[position].answer,
+            "type": "quiz"
+        }
+        prGreen(DEBUGFN+DEBUGMN+"Data for poll prepared")
+        return json_data
+
+    def trivia_handler(self, data, gchatid):
+        success, question = retrieveQuestions()
+        global position
+        if success:
+            poll_data = self.prepare_data_for_poll(data, question, position)
+            pollID = self.send_poll(poll_data)
+            position += 1
+        else:
+            position = 0
+            prRed(DEBUGFN+DEBUGMN +
+                  " No question found!")
+                
+
 
     def assign_number_game_handler(self, cuser, data, chatid, gchatid, params):
         DEBUGMN = "[number_game_handler]"
@@ -270,13 +313,29 @@ class TelegramBot(BotHandlerMixin, Bottle):
 
     def show_stats(self, data, gchatid):
         users = db.reference('/ID').get()
-        text = ""
+        
+        scores = []
         for user in users:
+            userscore = users.get(user)['score']
+            scores.append(userscore)
+        scores.sort(reverse=True)
+
+        sorted_users = []
+        i = 0
+        while(len(sorted_users) != len(users)):
+            for user in users:
+                if(users.get(user)['score'] == scores[i]):
+                    sorted_users.append(user)
+            i += 1
+        
+        text = ""
+        for user in sorted_users:
             text += "El score de {} es: {}\n".format(users.get(user)['nickname'], users.get(user)['score']) 
             #prGreen("El score de {} es: {}".format(users.get(user)['nickname'], users.get(user)['score']))
         stat_to_message = self.prepare_data_for_text(
             data, '/code:', text, "", gchatid)
         self.send_message(stat_to_message)
+
     def post_handler(self):
         global attempts
         global alive
@@ -309,6 +368,10 @@ class TelegramBot(BotHandlerMixin, Bottle):
                 attempts = 10
                 cuser = retrieveUser(chatid)
                 self.assign_number_game_handler(cuser, data, chatid, gchatid, message_text[1])
+            elif (message_text[1] == '/trivia'):
+                prCyan(gchatid)
+                prGreen(DEBUGFN+DEBUGMN+" Starting Trivia Game")
+                self.trivia_handler(data, gchatid)
             elif (message_text[1] == '/stats'):
                 self.show_stats(data, gchatid)
             else:

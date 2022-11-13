@@ -108,23 +108,16 @@ class SubModule:
         name : `str`
         alt_questions : `List of [Question]`
                 This submodule alternatives questions.
-        code_questions : `List of [Question]`
-                This submodule code questions.
-        umbral : `int`
-                Minimum points needed to advance to the next submodule.
         toJson : `dict`
                 data parsed to Json format.
     """
 
-    def __init__(self, name, alt_questions, code_questions, umbral):
+    def __init__(self, name, alt_questions):
         self.name = name
         self.alt_questions = alt_questions
-        self.code_questions = code_questions
-        self.umbral = umbral
 
     def toJson(self):
-        return{'name': self.name, 'alt_questions': self.alt_questions,
-               'code_questions': self.code_questions, 'umbral': self.umbral}
+        return{'name': self.name, 'alt_questions': self.alt_questions}
 
 
 class Question:
@@ -147,12 +140,9 @@ class Question:
                 data parsed to Json format.
     """
 
-    def __init__(self, question, q_type, difficulty, answer, hint, alternatives=[]):
+    def __init__(self, question, answer, alternatives=[]):
         self.question = question
-        self.q_type = q_type
-        self.difficulty = difficulty
         self.answer = answer
-        self.hint = hint
         self.alternatives = alternatives
 
     def toJson(self):
