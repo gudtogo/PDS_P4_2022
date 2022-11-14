@@ -143,6 +143,7 @@ activeGame = False
 user = 0
 auxVar = 0
 number_of_questions = 0
+data_for_trivia = 0
 
 class TelegramBot(BotHandlerMixin, Bottle):
 
@@ -242,7 +243,7 @@ class TelegramBot(BotHandlerMixin, Bottle):
         global position
         global number_of_questions
         n_questions = message.split()
-        number_of_questions = n_questions[1]
+        number_of_questions = int(n_questions[1])
         if success:
             poll_data = self.prepare_data_for_poll(data, question, position)
             self.send_poll(poll_data)
@@ -251,11 +252,17 @@ class TelegramBot(BotHandlerMixin, Bottle):
             position = 0
             prRed(DEBUGFN+DEBUGMN +
                   " No question found!")
-                
+
+    def trivia_handler2(self, data):
+        success, question = retrieveQuestions()
+        global position
+        if success:
+            poll_data = self.prepare_data_for_poll(data, question, position)
+            self.send_poll(poll_data)
+
     def poll_answer_handler(self, given_answer, data, user, questions):
         global answers
         global position
-        global number_of_questions
         DEBUGMN = "[poll_answer_handler]"
         prGreen(DEBUGFN+DEBUGMN+" poll answer received!")
         correct_answer_position = int(json.dumps(data['poll']['correct_option_id']))
@@ -264,8 +271,6 @@ class TelegramBot(BotHandlerMixin, Bottle):
 
         if given_answer == correct_answer:
             prCyan(f"Respuecta correcta con respuesta de usuario = {given_answer} y respuesta correcta = {correct_answer}")
-            position += 1
-            number_of_questions -= 1
         else:
             prRed("Respuesta incorrecta")
 
@@ -382,6 +387,9 @@ class TelegramBot(BotHandlerMixin, Bottle):
         global auxVar
         global answers
         global correctAnswer2
+        global data_for_trivia
+        global number_of_questions
+        global position
         """
         Method that handles receiving and sending messages from/to the TelegramAPI.
         """
@@ -391,11 +399,16 @@ class TelegramBot(BotHandlerMixin, Bottle):
         if (auxVar == 1):
             auxVar = 0
             userAnswer = answers[int(data['poll_answer']['option_ids'][0])]
-            if userAnswer == correctAnswer2:
+            if userAnswer == correctAnswer2: 
                 us2 = retrieveUser(data['poll_answer']['user']['id'])
                 us2.score += 1
                 updateUser(chatID=us2.chatID, user=us2)
-                self.trivia_handler()
+                number_of_questions -= 1
+                position += 1
+                if number_of_questions > 0:
+                    self.trivia_handler2(data_for_trivia)
+                else:
+                    position = 0
         elif ('poll' in data and auxVar == 0):
             message_text = self.get_message(data)
             auxVar = 1
@@ -426,6 +439,7 @@ class TelegramBot(BotHandlerMixin, Bottle):
                     self.send_message(not_alive)
 
             elif ('/trivia' in message_text[1]):
+                data_for_trivia = data
                 prGreen(DEBUGFN+DEBUGMN+" Starting Trivia Game")
                 self.trivia_handler(data, gchatid, message_text[1])
             elif (message_text[1] == '/stats'):
