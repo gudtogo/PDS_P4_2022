@@ -67,5 +67,5 @@ node_modules/
 
 #py-cache
 botManage/__pycache__/
-firebaseMangage/__pycache__/
-itsManage/__pycache__/
+firebaseManage/__pycache__/
+itsObjects/__pycache__/
