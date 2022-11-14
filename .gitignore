@@ -66,4 +66,6 @@ node_modules/
 .env
 
 #py-cache
-__pycache__/
+botManage/__pycache__/
+firebaseMangage/__pycache__/
+itsManage/__pycache__/
