@@ -9,7 +9,7 @@ from bottle import Bottle, run, post, response, request as bottle_request
 
 DEBUGFN = "[requestsManagement]"
 numbers = 0
-
+answers = []
 
 class BotHandlerMixin:
     API_KEY = os.getenv('API_KEY')
@@ -120,10 +120,12 @@ class BotHandlerMixin:
             `str`
             the poll id from where the answer comes.
         """
+        global answers
         DEBUGMN = "[send_poll]"
         message_url = self.BOT_URL + 'sendPoll'
         prGreen(DEBUGFN+DEBUGMN+" sending poll...")
         prCyan(prepared_data)
+        answers = preapared_data['options']
         r = requests.post(message_url, json=prepared_data)
         prCyan(r.json())
         prGreen(DEBUGFN+DEBUGMN +
@@ -134,9 +136,9 @@ max_number = 0
 position = 0
 alive = True
 activeGame = False
+user = 0
 
 class TelegramBot(BotHandlerMixin, Bottle):
-
 
     def __init__(self, BOT_URL, API_KEY, SERVER_URL):
         super(TelegramBot, self).__init__()
@@ -228,18 +230,34 @@ class TelegramBot(BotHandlerMixin, Bottle):
         return json_data
 
     def trivia_handler(self, data, gchatid):
+        DEBUGMN = "[prepare_data_for_poll]"
         success, question = retrieveQuestions()
         global position
         if success:
             poll_data = self.prepare_data_for_poll(data, question, position)
-            pollID = self.send_poll(poll_data)
-            position += 1
+            self.send_poll(poll_data)
+
         else:
             position = 0
             prRed(DEBUGFN+DEBUGMN +
                   " No question found!")
                 
+    def poll_answer_handler(self, given_answer, data, user):
+        global answers
+        global position
+        DEBUGMN = "[poll_answer_handler]"
+        prGreen(DEBUGFN+DEBUGMN+" poll answer received!")
+        correct_answer_position = int(json.dumps(data['poll']['correct_option_id']))
+        correct_answer = answers[correct_answer_position]
+        prRed(correct_answer)
 
+        if given_answer == correct_answer:
+            user.score += 1
+            updateUser(chatID=user.chatID, user=user)
+            prCyan(f"Respuecta correcta con respuesta de usuario = {given_answer} y respuesta correcta = {correct_answer}")
+            position += 1
+        else:
+            prRed("Respuesta incorrecta")
 
     def assign_number_game_handler(self, cuser, data, chatid, gchatid, params):
         DEBUGMN = "[number_game_handler]"
@@ -350,6 +368,7 @@ class TelegramBot(BotHandlerMixin, Bottle):
     def post_handler(self):
         global alive
         global activeGame
+        global user
         """
         Method that handles receiving and sending messages from/to the TelegramAPI.
         """
@@ -358,7 +377,7 @@ class TelegramBot(BotHandlerMixin, Bottle):
         prGreen(DEBUGFN+DEBUGMN+f" data_received: {data}")
         message_text = self.get_message(data)
         if ('poll' in data):
-            self.poll_answer_handler(message_text[1], data)
+            self.poll_answer_handler(message_text[1], data, user)
         else:
             chatid = self.get_message_id(data)
             gchatid = self.get_groupchat_id(data)
@@ -368,6 +387,7 @@ class TelegramBot(BotHandlerMixin, Bottle):
             if message_text[1] == '/start':
                 prGreen(DEBUGFN+DEBUGMN+" new user request")
                 chat_id = data['message']['from']['id']
+                user = retrieveUser(chatid)
                 if detectNewUser(str(chat_id), user_nickname):
                     nuser_data = self.prepare_data_for_text(data, 'newuser', "", "", gchatid)
                 else:
