@@ -125,7 +125,7 @@ class BotHandlerMixin:
         message_url = self.BOT_URL + 'sendPoll'
         prGreen(DEBUGFN+DEBUGMN+" sending poll...")
         prCyan(prepared_data)
-        answers = preapared_data['options']
+        answers = prepared_data['options']
         r = requests.post(message_url, json=prepared_data)
         prCyan(r.json())
         prGreen(DEBUGFN+DEBUGMN +
