@@ -24,6 +24,48 @@ m2.alt_questions.append(Question(question="What is the scientific name for moder
                                                answer=0,
                                                alternatives=qalternatives))
 
+qalternatives = ["Castor","Daedalus","Jason","Odysseus"]
+m2.alt_questions.append(Question(question="Who in Greek mythology, who led the Argonauts in search of the Golden Fleece?",
+                                      answer=2,
+                                      alternatives=qalternatives))
+                                    
+qalternatives = ["Wangan Midnight","Kino no Tabi","Cowboy Bebop", "Initial D"]
+m2.alt_questions.append(Question(question="Which anime heavily features music from the genre 'Eurobeat'?",
+                                               answer=3,
+                                               alternatives=qalternatives))
+
+qalternatives = ["Wheat","Bread","Milk","Egg"]
+m2.alt_questions.append(Question(question="What ingredient is NOT used to craft a cake in Minecraft?",
+                                      answer=1,
+                                      alternatives=qalternatives))
+                                    
+qalternatives = ["Activision","Konami","Electronic Arts","Harmonix"]
+m2.alt_questions.append(Question(question="What company develops the Rock Band series of rhythm games?",
+                                               answer=3,
+                                               alternatives=qalternatives))
+
+qalternatives = ["Tardar Sauce","Sauce","Minnie","Broccoli"]
+m2.alt_questions.append(Question(question="What is Grumpy Cat's real name?",
+                                      answer=0,
+                                      alternatives=qalternatives))
+                                    
+qalternatives = ["Gabriel Garcia Marquez","Jesus Quintero","Juan Joya Borga","Ernesto Guevara"]
+m2.alt_questions.append(Question(question="What is the real name of the famous spanish humorist, El Risitas?",
+                                               answer=2,
+                                               alternatives=qalternatives))
+
+qalternatives = ["Black","Brown","White","Yellow"]
+m2.alt_questions.append(Question(question="What colour is the female blackbird?",
+                                      answer=1,
+                                      alternatives=qalternatives))
+                                    
+qalternatives = ["Region","River","Country","City"]
+m2.alt_questions.append(Question(question="What is Laos?",
+                                               answer=2,
+                                               alternatives=qalternatives))
+
+
+
 trivia = [m2]
 
 def retrieveQuestions():
