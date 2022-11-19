@@ -1,4 +1,5 @@
 from .botObjects import Module, SubModule, Question
+import random
 DEBUGFN = "[tutorialData]"
 def prRed(skk): print("\033[91m {}\033[00m" .format(skk))
 
@@ -65,7 +66,6 @@ m2.alt_questions.append(Question(question="What is Laos?",
                                                alternatives=qalternatives))
 
 
-
 trivia = [m2]
 
 def retrieveQuestions():
@@ -94,4 +94,6 @@ def retrieveQuestions():
         return False, None
     else:
         prGreen(DEBUGFN+DEBUGMN + " Success questions found " + str(wantedQuestions[0].question))
+        
+    random.shuffle(wantedQuestions)
     return True, wantedQuestions
