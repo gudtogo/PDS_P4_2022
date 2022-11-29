@@ -64,7 +64,7 @@ qalternatives = ["Region","River","Country","City"]
 m2.alt_questions.append(Question(question="What is Laos?",
                                                answer=2,
                                                alternatives=qalternatives))
-
+"""
 qalternatives = ["Ubisoft","Pixeltail Games","Valve","Electronic Arts"]
 m2.alt_questions.append(Question(question="Who created the digital distribution platform Steam?",
                                       answer=2,
@@ -564,7 +564,7 @@ qalternatives = ["Yoko Ono","LiSA","Kyoko Ito","Kyary Pamyu Pamyu"]
 m2.alt_questions.append(Question(question="What is the name of Rivers Cuomo's wife?",
                                       answer=2,
                                       alternatives=qalternatives))
-
+"""
 trivia = [m2]
 
 def retrieveQuestions():

@@ -138,6 +138,7 @@ class BotHandlerMixin:
 
 max_number = 0
 position = 0
+time = 0
 alive = True
 activeGame = False
 user = 0
@@ -237,23 +238,50 @@ class TelegramBot(BotHandlerMixin, Bottle):
         prGreen(DEBUGFN+DEBUGMN+"Data for poll prepared")
         return json_data
 
-    def trivia_handler(self, data, gchatid, message):
+    def prepare_data_for_poll2(self, data, question, position, time):
+        """
+        Method that takes the data and parse it to JSON format for the poll to be sent.
+        Parameters
+        ----------
+            data : `dict`
+                    data received from the previous message.
+            question : `Question`
+                    Question to be asked.
+        Returns
+        -------
+            `dict`
+                the data in JSON format as stated in the TelegramAPI documentation.
+        """
+        DEBUGMN = "[prepare_data_for_poll]"
+        gchat_id = self.get_groupchat_id(data)
+        json_data = {
+            "chat_id": gchat_id,
+            "question": question[position].question,
+            "options": question[position].alternatives,
+            "correct_option_id": question[position].answer,
+            "type": "quiz",
+            "is_anonymous": "False",
+            "close_period": time
+        }
+        prGreen(DEBUGFN+DEBUGMN+"Data for poll prepared")
+        return json_data
+
+    def trivia_first_handler(self, data, gchatid, message):
         DEBUGMN = "[prepare_data_for_poll]"
         success, question = retrieveQuestions()
         global position
         global number_of_questions
         n_questions = message.split()
-        number_of_questions = int(n_questions[1])
+        number_of_questions = int(n_questions[2])
         if success:
             poll_data = self.prepare_data_for_poll(data, question, position)
             self.send_poll(poll_data)
-
         else:
             position = 0
             prRed(DEBUGFN+DEBUGMN +
                   " No question found!")
 
-    def trivia_handler2(self, data):
+    def trivia_first_handler2(self, data):
         success, question = retrieveQuestions()
         global position
         if success:
@@ -273,6 +301,31 @@ class TelegramBot(BotHandlerMixin, Bottle):
             prCyan(f"Respuecta correcta con respuesta de usuario = {given_answer} y respuesta correcta = {correct_answer}")
         else:
             prRed("Respuesta incorrecta")
+
+    def trivia_time_handler(self, data, gchatid, message):
+        DEBUGMN = "[prepare_data_for_poll]"
+        success, question = retrieveQuestions()
+        global position
+        global number_of_questions
+        global time
+        n_questions = message.split()
+        number_of_questions = int(n_questions[2])
+        time = int(n_questions[3])
+        if success:
+            poll_data = self.prepare_data_for_poll2(data, question, position, time)
+            self.send_poll(poll_data)
+        else:
+            position = 0
+            prRed(DEBUGFN+DEBUGMN +
+                  " No question found!")
+
+    def trivia_time_handler2(self, data):
+        success, question = retrieveQuestions()
+        global position
+        global time
+        if success:
+            poll_data = self.prepare_data_for_poll2(data, question, position, time)
+            self.send_poll(poll_data)
 
     def assign_number_game_handler(self, cuser, data, chatid, gchatid, params):
         DEBUGMN = "[number_game_handler]"
@@ -406,7 +459,7 @@ class TelegramBot(BotHandlerMixin, Bottle):
                 number_of_questions -= 1
                 position += 1
                 if number_of_questions > 0:
-                    self.trivia_handler2(data_for_trivia)
+                    self.trivia_first_handler2(data_for_trivia)
                 else:
                     position = 0
         elif ('poll' in data and auxVar == 0):
@@ -437,11 +490,18 @@ class TelegramBot(BotHandlerMixin, Bottle):
                     not_alive = self.prepare_data_for_text(
                         data, '/code:', '{}, no puedes iniciar otro juego, espera a que el juego activo termine'.format(user_nickname), "", gchatid)
                     self.send_message(not_alive)
-
-            elif ('/trivia' in message_text[1]):
+            elif (('/trivia' in message_text[1]) and ('first' in message_text[1])):
                 data_for_trivia = data
-                prGreen(DEBUGFN+DEBUGMN+" Starting Trivia Game")
-                self.trivia_handler(data, gchatid, message_text[1])
+                prGreen(DEBUGFN+DEBUGMN+" Starting Trivia First Game")
+                self.trivia_first_handler(data, gchatid, message_text[1])
+            elif (('/trivia' in message_text[1]) and ('time' in message_text[1])):
+                data_for_trivia = data
+                prGreen(DEBUGFN+DEBUGMN+" Starting Trivia Time Game")
+                self.trivia_time_handler(data, gchatid, message_text[1])
+            elif ('/hanged' in message_text[1]):
+                #data_for_hanged = data
+                prGreen(DEBUGFN+DEBUGMN+" Starting Hanged Time Game")
+                #self.trivia_time_handler(data, gchatid, message_text[1])
             elif (message_text[1] == '/stats'):
                 self.show_stats(data, gchatid)
             else:
