@@ -58,11 +58,13 @@ def detectNewUser(chatID, nickname):
     if chatID not in snapshot:
         #new_user = User(chatID=chatID, score=0,
                         #hints=0, nickname=nickname)
+        prRed(chatID)
         new_user = User(chatID=chatID, score=0,
                         nickname=nickname, attempts=0)
         try:
             #new_user.currentSubModule = startersubm
             usersDatabase.child(chatID).set(new_user.toJson())
+            prRed(new_user)
             prGreen(DEBUGFN+DEBUGMN+f" User saved to the db.")
             return True
         except Exception as err:
