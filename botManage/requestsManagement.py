@@ -2,6 +2,7 @@ import os
 import requests
 import json
 import random
+import time
 from firebaseManage import *
 from firebase_admin import db
 from itsObjects import *
@@ -274,7 +275,7 @@ class TelegramBot(BotHandlerMixin, Bottle):
             "correct_option_id": question[position].answer,
             "type": "quiz",
             "is_anonymous": "False",
-            "close_period": time
+            "open_period": time
         }
         prGreen(DEBUGFN+DEBUGMN+"Data for poll prepared")
         return json_data
