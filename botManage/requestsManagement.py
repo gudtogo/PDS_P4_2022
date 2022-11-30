@@ -2,7 +2,9 @@ import os
 import requests
 import json
 import random
-import time
+from time import sleep
+from threading import Thread
+from datetime import datetime
 from firebaseManage import *
 from firebase_admin import db
 from itsObjects import *
@@ -32,8 +34,12 @@ class BotHandlerMixin:
             `Str`
                 The chat id from the message.
         """
-        chat_id = data['message']['from']['id']
+        try:
+            chat_id = data['message']['from']['id']
+        except KeyError:
+            return
         return chat_id
+        
 
     def get_groupchat_id(self, data):
         """
@@ -49,7 +55,10 @@ class BotHandlerMixin:
             `Str`
                 The chat id from the message.
         """
-        chat_id = data['message']['chat']['id']
+        try:
+            chat_id = data['message']['chat']['id']
+        except KeyError:
+            return
         return chat_id
 
 
@@ -67,7 +76,10 @@ class BotHandlerMixin:
             `Str`
                 The poll id from the message.
         """
-        poll_id = data['poll']['id']
+        try:
+            poll_id = data['poll']['id']
+        except KeyError:
+            return
         return poll_id
 
     def get_message(self, data):
@@ -87,14 +99,17 @@ class BotHandlerMixin:
         try:
             message_text = [0, data['message']['text']]
         except KeyError:
-            results = data['poll']['options']
-            message_text = results
-            for chosenalt in results:
-                if chosenalt['voter_count'] == 1:
-                    message_text = [1, chosenalt['text']]
-                    break
-            else:
-                message_text = [1, 'blank']
+            try:
+                results = data['poll']['options']
+                message_text = results
+                for chosenalt in results:
+                    if chosenalt['voter_count'] == 1:
+                        message_text = [1, chosenalt['text']]
+                        break
+                    else:
+                        message_text = [1, 'blank']
+            except KeyError:
+                return
         return message_text
 
     def send_message(self, prepared_data):
@@ -154,12 +169,16 @@ alive = True
 activeGame = False
 user = 0
 auxVar = 0
+auxVar2 = 0
 number_of_questions = 0
 data_for_trivia = 0
 number_of_players = 0
 participants = 0
 player_score = {}
 closed_poll = False
+activeTime = False
+poll_timer = datetime
+next_poll = 0
 
 class TelegramBot(BotHandlerMixin, Bottle):
 
@@ -287,15 +306,22 @@ class TelegramBot(BotHandlerMixin, Bottle):
         success, question = retrieveQuestions()
         global position
         global number_of_questions
+        global activeGame
         n_questions = message.split()
         number_of_questions = int(n_questions[2])
-        if success:
-            poll_data = self.prepare_data_for_poll(data, question, position)
-            self.send_poll(poll_data)
+        if number_of_questions >= 1:
+            if success:
+                poll_data = self.prepare_data_for_poll(data, question, position)
+                self.send_poll(poll_data)
+            else:
+                position = 0
+                prRed(DEBUGFN+DEBUGMN +
+                    " No question found!")
         else:
-            position = 0
-            prRed(DEBUGFN+DEBUGMN +
-                  " No question found!")
+            invalido = self.prepare_data_for_text(
+                            data, '/code:', 'Parametro del comando invalido', "", gchatid)
+            self.send_message(invalido)
+            activeGame = False
 
     def trivia_first_handler2(self, data):
         success, question = retrieveQuestions()
@@ -324,16 +350,27 @@ class TelegramBot(BotHandlerMixin, Bottle):
         global position
         global number_of_questions
         global time
+        global next_poll
+        global activeGame
+        global activeTime
         n_questions = message.split()
         number_of_questions = int(n_questions[2])
         time = int(n_questions[3])
-        if success:
-            poll_data = self.prepare_data_for_poll2(data, question, position, time)
-            self.send_poll(poll_data)
+        if ((number_of_questions >= 1) and (time >= 5) and (time <= 599)):
+            next_poll = time 
+            if success:
+                poll_data = self.prepare_data_for_poll2(data, question, position, time)
+                self.send_poll(poll_data)
+            else:
+                position = 0
+                prRed(DEBUGFN+DEBUGMN +
+                    " No question found!")
         else:
-            position = 0
-            prRed(DEBUGFN+DEBUGMN +
-                  " No question found!")
+            invalido = self.prepare_data_for_text(
+                            data, '/code:', 'Parametro del comando invalido', "", gchatid)
+            self.send_message(invalido)
+            activeGame = False
+            activeTime = False
 
     def trivia_time_handler2(self, data):
         success, question = retrieveQuestions()
@@ -342,7 +379,7 @@ class TelegramBot(BotHandlerMixin, Bottle):
         if success:
             poll_data = self.prepare_data_for_poll2(data, question, position, time)
             self.send_poll(poll_data)
-
+    
     def assign_number_game_handler(self, cuser, data, chatid, gchatid, params):
         DEBUGMN = "[number_game_handler]"
         message = params.split()
@@ -350,13 +387,13 @@ class TelegramBot(BotHandlerMixin, Bottle):
         global max_number
         global activeGame
         ready = False
-        if cuser == None:
-            not_registered = self.prepare_data_for_text(
-                data, '/code:', f'No has comenzado ningun juego!, escribe "/start" para comenzar!')
-            self.send_message(not_registered)
-            return
         if (int(message[1]) > 0):
             ready = True
+        else:
+            invalido = self.prepare_data_for_text(
+                            data, '/code:', 'Parametro del comando invalido', "", gchatid)
+            self.send_message(invalido)
+            activeGame = False
         if ready == True:
             attempts = int(message[1])
             max_number = int(message[2])
@@ -472,148 +509,269 @@ class TelegramBot(BotHandlerMixin, Bottle):
         global participants
         global player_score
         global closed_poll
+        global activeTime
+        global poll_timer
+        global next_poll
+        global time
+        global auxVar2
         """
         Method that handles receiving and sending messages from/to the TelegramAPI.
         """
         DEBUGMN = "[post_handler]"
         data = bottle_request.json
         prGreen(DEBUGFN+DEBUGMN+f" data_received: {data}")
-        if (auxVar == 1):
-            auxVar = 0
+        prRed(auxVar2)
+        prRed(activeTime)
+        try:
+            if ((auxVar == 1) and (activeTime == False)):
+                auxVar = 0
 
-            userAnswer = answers[int(data['poll_answer']['option_ids'][0])]
-            if userAnswer == correctAnswer2 and closed_poll == False:
-                user_answering = data['poll_answer']['user']['first_name'] 
-                gchatid = poll_group_id
-                poll_question_answer = self.prepare_data_for_text(
-                        data, '/code:', 'El usario {} respondio correctamente la pregunta anterior!, esperando a que todos los participantes terminen de responder...'.format(user_answering), "", gchatid)
-                self.send_message(poll_question_answer)
-                us2 = retrieveUser(str(data['poll_answer']['user']['id'])+"|"+ str(gchatid))
-                number_of_questions -= 1
-                position += 1
-                player_score[str(us2.chatID)] = player_score[str(us2.chatID)] + 1
-                closed_poll = True
-                """  
-                if number_of_questions > 0:
+                try:
+                    userAnswer = answers[int(data['poll_answer']['option_ids'][0])]
+                except KeyError:
+                    userAnswer = ""
+                    return
+                if userAnswer == correctAnswer2 and closed_poll == False:
+                    user_answering = data['poll_answer']['user']['first_name'] 
+                    gchatid = poll_group_id
+                    poll_question_answer = self.prepare_data_for_text(
+                            data, '/code:', 'El usario {} respondio correctamente la pregunta anterior!, esperando a que todos los participantes terminen de responder...'.format(user_answering), "", gchatid)
+                    self.send_message(poll_question_answer)
+                    us2 = retrieveUser(str(data['poll_answer']['user']['id'])+"|"+ str(gchatid))
+                    number_of_questions -= 1
+                    position += 1
+                    player_score[str(us2.chatID)] = player_score[str(us2.chatID)] + 1
+                    closed_poll = True
+
+                participants -= 1
+                if (participants == 0):
+                    if (closed_poll == False):
+                        no_correct_answer = self.prepare_data_for_text(
+                                data, '/code:', 'Ningun usuario respondio correctamente la pregunta anterior, enviando la siguiente pregunta...', "", poll_group_id)
+                        self.send_message(no_correct_answer)
+                        number_of_questions -= 1
+
+                    if (number_of_questions == 0):
+                        gchatid = poll_group_id
+                        winner_id = max(player_score, key=player_score.get)
+                        winner_user = retrieveUser(winner_id)
+                        winner_user.score += 1
+                        updateUser(chatID=winner_user.chatID, user=winner_user)
+                        keys = {}
+                        for key in player_score:
+                            if key != winner_user.chatID:
+                                keys[key] = player_score[key]
+
+                        prRed(keys)
+
+                        ended_game = self.prepare_data_for_text(
+                            data, '/code:', 'Juego terminado!, el ganador del juego fue {} con {} respuestas correctas. \nEl puntaje de los otros participantes fue:'.format(winner_user.nickname, player_score[winner_user.chatID]), "", gchatid)
+                        self.send_message(ended_game)
+                        text = ""
+                        for key in keys:
+                            usss = retrieveUser(key)
+                            text += " {} : {} \n".format(usss.nickname ,keys[key])
+                            ended_game2 = self.prepare_data_for_text(
+                                data, '/code:', text, "", gchatid)
+                            self.send_message(ended_game2)
+                        position = 0
+                        activeGame = False
+                        closed_poll = False
+                        participants = number_of_players
+                        return
+                    closed_poll = False
                     self.trivia_first_handler2(data_for_trivia)
                     participants = number_of_players
-                else:
-                    winner_id = max(player_score, key=player_score.get)
-                    winner_user = retrieveUser(winner_id)
-                    winner_user.score += 1
-                    updateUser(chatID=winner_user.chatID, user=winner_user)
-                    ended_game = self.prepare_data_for_text(
-                        data, '/code:', 'Juego terminado!, el ganador del juego fue {} con {} respuestas correctas'.format(winner_user.nickname, player_score[winner_user.chatID]), "", gchatid)
-                    self.send_message(ended_game)
-                    position = 0
-                    activeGame = False
-                return
-                """
-            participants -= 1
-            if (participants == 0):
-                if (closed_poll == False):
-                    no_correct_answer = self.prepare_data_for_text(
-                            data, '/code:', 'Ningun usuario respondio correctamente la pregunta anterior, enviando la siguiente pregunta...', "", poll_group_id)
-                    self.send_message(no_correct_answer)
-                    number_of_questions -= 1
+            elif ((auxVar2 == 1) and (activeTime == True)):
+                auxVar2 = 0
 
-                if (number_of_questions == 0):
+                userAnswer = answers[int(data['poll_answer']['option_ids'][0])]
+                if userAnswer == correctAnswer2:
+                    user_answering = data['poll_answer']['user']['first_name'] 
                     gchatid = poll_group_id
-                    winner_id = max(player_score, key=player_score.get)
-                    winner_user = retrieveUser(winner_id)
-                    winner_user.score += 1
-                    updateUser(chatID=winner_user.chatID, user=winner_user)
-                    ended_game = self.prepare_data_for_text(
-                        data, '/code:', 'Juego terminado!, el ganador del juego fue {} con {} respuestas correctas'.format(winner_user.nickname, player_score[winner_user.chatID]), "", gchatid)
-                    self.send_message(ended_game)
-                    position = 0
-                    activeGame = False
-                    closed_poll = False
-                    participants = number_of_players
-                    return
-                closed_poll = False
-                self.trivia_first_handler2(data_for_trivia)
-                participants = number_of_players
-        elif ('poll' in data and auxVar == 0):
-            message_text = self.get_message(data)
-            auxVar = 1
-            #self.poll_answer_handler(message_text[1], data, user)
-        else:
-            message_text = self.get_message(data)
-            chatid = self.get_message_id(data)
-            gchatid = self.get_groupchat_id(data)
-            prGreen(DEBUGFN+DEBUGMN+" text message received")
-            user_nickname = data['message']['from']['first_name']
-            prCyan(user_nickname)
-            if (message_text[1] == '/start'):
-                prGreen(DEBUGFN+DEBUGMN+" new user request")
-                chat_id = data['message']['from']['id']
-
-                if detectNewUser(str(chat_id) + "|" + str(gchatid), user_nickname):
-                    nuser_data = self.prepare_data_for_text(data, 'newuser', "", "", gchatid)
-                else:
-                    nuser_data = self.prepare_data_for_text(data, 'olduser', "", "", gchatid)
-                self.send_message(nuser_data)
-            elif ('/number' in message_text[1]):
-                if(activeGame == False):
-                    prRed(message_text[1])
-                    cuser = retrieveUser(str(chatid)+ "|" + str(gchatid))
-                    self.assign_number_game_handler(cuser, data, str(chatid)+ "|" + str(gchatid), gchatid, message_text[1])
-                else:
-                    not_alive = self.prepare_data_for_text(
-                        data, '/code:', '{}, no puedes iniciar otro juego, espera a que el juego activo termine'.format(user_nickname), "", gchatid)
-                    self.send_message(not_alive)
-            elif (('/trivia' in message_text[1]) and ('first' in message_text[1])):
-                if (activeGame == True):
-                    not_alive = self.prepare_data_for_text(
-                        data, '/code:', '{}, no puedes iniciar otro juego, espera a que el juego activo termine'.format(user_nickname), "", gchatid)
-                    self.send_message(not_alive)
-                    return
+                    #poll_question_answer = self.prepare_data_for_text(
+                    #        data, '/code:', 'El usario {} respondio correctamente la pregunta anterior!, esperando a que termine el tiempo...'.format(user_answering), "", gchatid)
+                    #self.send_message(poll_question_answer)
+                    us2 = retrieveUser(str(data['poll_answer']['user']['id'])+"|"+ str(gchatid))
+                    number_of_questions -= 1
+                    position += 1
+                    tiempo = (datetime.now() - poll_timer).total_seconds()
+                    player_score[str(us2.chatID)] = player_score[str(us2.chatID)] + 1*int(tiempo)
+                """ 
+                #participants -= 1
+                if (next_poll == 0):
+                    if (closed_poll == False):
+                        no_correct_answer = self.prepare_data_for_text(
+                                data, '/code:', 'Ningun usuario respondio correctamente la pregunta anterior, enviando la siguiente pregunta...', "", poll_group_id)
+                        self.send_message(no_correct_answer)
+                        number_of_questions -= 1
+                """   
                 
-                users = db.reference('/ID').get()
+                    #participants = number_of_players
+                    
+                    #self.trivia_time_handler2(data_for_trivia)
+                    #participants = number_of_players
 
-                for user in users:
-                    if (users.get(user)['chatID'].split("|")[1] == str(gchatid)):
-                        player_score[users.get(user)['chatID']] = 0
-  
-                number_of_players = self.get_amount_of_chat_members(gchatid)
-                participants = number_of_players
-                data_for_trivia = data
-                prGreen(DEBUGFN+DEBUGMN+" Starting Trivia First Game")
-                self.trivia_first_handler(data, gchatid, message_text[1])
-                activeGame = True
-            elif (('/trivia' in message_text[1]) and ('time' in message_text[1])):
-                if (activeGame == True):
-                    not_alive = self.prepare_data_for_text(
-                        data, '/code:', '{}, no puedes iniciar otro juego, espera a que el juego activo termine'.format(user_nickname), "", gchatid)
-                    self.send_message(not_alive)
-                    return
-                
-                data_for_trivia = data
-                prGreen(DEBUGFN+DEBUGMN+" Starting Trivia Time Game")
-                self.trivia_time_handler(data, gchatid, message_text[1])
-                activeGame = True
-            elif ('/hanged' in message_text[1]):
-                if (activeGame == True):
-                    not_alive = self.prepare_data_for_text(
-                        data, '/code:', '{}, no puedes iniciar otro juego, espera a que el juego activo termine'.format(user_nickname), "", gchatid)
-                    self.send_message(not_alive)
-                    return
-                #data_for_hanged = data
-                prGreen(DEBUGFN+DEBUGMN+" Starting Hanged Game")
-                #self.trivia_time_handler(data, gchatid, message_text[1])
-                activeGame = True
-            elif (message_text[1] == '/stats'):
-                self.show_stats(data, gchatid)
-            elif ('/play' in message_text[1]):
-                cuser = retrieveUser(str(chatid)+ "|" + str(gchatid))
-                if activeGame == False:
-                    return
-                if ((activeGame == True) and (cuser.attempts == 0)):
-                    not_alive = self.prepare_data_for_text(
-                        data, '/code:', '{}, ya no tienes mas intentos, espera a que el juego termine'.format(user_nickname), "", gchatid)
-                    self.send_message(not_alive)
-                elif ((activeGame == True) and (cuser.attempts >= 1)):
-                    self.try_guessing_number_handler(message_text[1], str(chatid)+ "|" + str(gchatid), gchatid, user_nickname)
+            elif ('poll' in data and auxVar == 0 and activeTime == False):
+                message_text = self.get_message(data)
+                auxVar = 1
+                #self.poll_answer_handler(message_text[1], data, user)
+            elif ('poll' in data and auxVar2 == 0 and activeTime == True):
+                message_text = self.get_message(data)
+                auxVar2 = 1
+                #self.poll_answer_handler(message_text[1], data, user)
             else:
-                return
+                message_text = self.get_message(data)
+                chatid = self.get_message_id(data)
+                gchatid = self.get_groupchat_id(data)
+                prGreen(DEBUGFN+DEBUGMN+" text message received")
+                user_nickname = data['message']['from']['first_name']
+                prCyan(user_nickname)
+                if (message_text[1] == '/start'):
+                    prGreen(DEBUGFN+DEBUGMN+" new user request")
+                    chat_id = data['message']['from']['id']
+
+                    if detectNewUser(str(chat_id) + "|" + str(gchatid), user_nickname):
+                        nuser_data = self.prepare_data_for_text(data, 'newuser', "", "", gchatid)
+                    else:
+                        nuser_data = self.prepare_data_for_text(data, 'olduser', "", "", gchatid)
+                    self.send_message(nuser_data)
+                elif ('/number' in message_text[1]):
+                    cuser = retrieveUser(str(chatid)+ "|" + str(gchatid))
+                    if cuser == None:
+                        not_registered = self.prepare_data_for_text(
+                            data, '/code:', f'Para utilizar el bot debes registrarte, escribe "/start" para comenzar!')
+                        self.send_message(not_registered)
+                        return
+                    if(activeGame == False):
+                        prRed(message_text[1])
+                        self.assign_number_game_handler(cuser, data, str(chatid)+ "|" + str(gchatid), gchatid, message_text[1])
+                    else:
+                        not_alive = self.prepare_data_for_text(
+                            data, '/code:', '{}, no puedes iniciar otro juego, espera a que el juego activo termine'.format(user_nickname), "", gchatid)
+                        self.send_message(not_alive)
+                elif (('/trivia' in message_text[1]) and ('first' in message_text[1])):
+                    cuser = retrieveUser(str(chatid)+ "|" + str(gchatid))
+                    if cuser == None:
+                        not_registered = self.prepare_data_for_text(
+                            data, '/code:', f'Para utilizar el bot debes registrarte, escribe "/start" para comenzar!')
+                        self.send_message(not_registered)
+                        return
+                    if (activeGame == True):
+                        not_alive = self.prepare_data_for_text(
+                            data, '/code:', '{}, no puedes iniciar otro juego, espera a que el juego activo termine'.format(user_nickname), "", gchatid)
+                        self.send_message(not_alive)
+                        return
+                    
+                    users = db.reference('/ID').get()
+
+                    for user in users:
+                        if (users.get(user)['chatID'].split("|")[1] == str(gchatid)):
+                            player_score[users.get(user)['chatID']] = 0
+    
+                    number_of_players = self.get_amount_of_chat_members(gchatid)
+                    participants = number_of_players
+                    data_for_trivia = data
+                    prGreen(DEBUGFN+DEBUGMN+" Starting Trivia First Game")
+                    activeGame = True
+                    self.trivia_first_handler(data, gchatid, message_text[1])
+                    
+                elif (('/trivia' in message_text[1]) and ('time' in message_text[1])):
+                    cuser = retrieveUser(str(chatid)+ "|" + str(gchatid))
+                    if cuser == None:
+                        not_registered = self.prepare_data_for_text(
+                            data, '/code:', f'Para utilizar el bot debes registrarte, escribe "/start" para comenzar!')
+                        self.send_message(not_registered)
+                        return
+                    if (activeGame == True):
+                        not_alive = self.prepare_data_for_text(
+                            data, '/code:', '{}, no puedes iniciar otro juego, espera a que el juego activo termine'.format(user_nickname), "", gchatid)
+                        self.send_message(not_alive)
+                        return
+
+                    users = db.reference('/ID').get()
+
+                    for user in users:
+                        if (users.get(user)['chatID'].split("|")[1] == str(gchatid)):
+                            player_score[users.get(user)['chatID']] = 0
+                    
+                    number_of_players = self.get_amount_of_chat_members(gchatid)
+                    participants = number_of_players
+                    data_for_trivia = data
+                    prGreen(DEBUGFN+DEBUGMN+" Starting Trivia Time Game")
+                    activeTime = True
+                    activeGame = True
+                    self.trivia_time_handler(data, gchatid, message_text[1])
+                    t1 = Thread(target=self.timer(time))
+                    t1.start()
+                    poll_timer = datetime.now()
+                    prRed(poll_timer)
+                    
+                elif (message_text[1] == '/stats'):
+                    cuser = retrieveUser(str(chatid)+ "|" + str(gchatid))
+                    if cuser == None:
+                        not_registered = self.prepare_data_for_text(
+                            data, '/code:', f'Para utilizar el bot debes registrarte, escribe "/start" para comenzar!')
+                        self.send_message(not_registered)
+                        return
+                    self.show_stats(data, gchatid)
+                elif ('/play' in message_text[1]):
+                    cuser = retrieveUser(str(chatid)+ "|" + str(gchatid))
+                    if cuser == None:
+                        not_registered = self.prepare_data_for_text(
+                            data, '/code:', f'Para utilizar el bot debes registrarte, escribe "/start" para comenzar!')
+                        self.send_message(not_registered)
+                        return
+                    if activeGame == False:
+                        return
+                    if ((activeGame == True) and (cuser.attempts == 0)):
+                        not_alive = self.prepare_data_for_text(
+                            data, '/code:', '{}, ya no tienes mas intentos, espera a que el juego termine'.format(user_nickname), "", gchatid)
+                        self.send_message(not_alive)
+                    elif ((activeGame == True) and (cuser.attempts >= 1)):
+                        self.try_guessing_number_handler(message_text[1], str(chatid)+ "|" + str(gchatid), gchatid, user_nickname)
+                else:
+                    return
+        except:
+            position = 0
+            activeGame = False
+            closed_poll = False
+            activeTime = False
+            auxVar2 = 0
+            return
+
+    def timer(self, timer):
+        global next_poll
+        global data_for_trivia
+        global number_of_questions
+        global position
+        global activeGame
+        global closed_poll
+        global activeTime
+        global player_score
+        global auxVar2
+
+        for i in range(timer):
+            sleep(1)
+        number_of_questions -= 1
+        position += 1
+        if (number_of_questions > 0):
+            auxVar2 = 0
+            self.trivia_time_handler2(data_for_trivia)
+            Thread(target=self.timer(time)).start()
+            return
+        if (number_of_questions == 0):
+                gchatid = poll_group_id
+                winner_id = min(player_score, key=player_score.get)
+                winner_user = retrieveUser(winner_id)
+                winner_user.score += 1
+                updateUser(chatID=winner_user.chatID, user=winner_user)
+                data = ""
+                ended_game = self.prepare_data_for_text(
+                    data, '/code:', 'Juego terminado!, el ganador del juego fue {} con un puntaje de {}'.format(winner_user.nickname, player_score[winner_user.chatID]), "", gchatid)
+                self.send_message(ended_game)
+                position = 0
+                activeGame = False
+                closed_poll = False
+                activeTime = False
+                auxVar2 = 0
